@@ -1,0 +1,19 @@
+{
+  "name": "hockey_eye",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.html",
+  "window": {
+    "title": "Team Strea m",
+    "icon": "link.png",
+    "toolbar": false,
+    "frame": true,
+    "position": "center",
+    "width": 640,
+    "height":480,
+    "min_width": 640,
+    "min_height": 480
+  },
+  "author": "",
+  "license": "ISC"
+}
