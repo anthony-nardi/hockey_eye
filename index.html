@@ -3,287 +3,394 @@
 	<head>
 		<link rel='stylesheet' type='text/css' href='lib/css/main.css'/>
 		<title>hockey eye</title>
-		<script src="lib/gui.js"></script>
-		<script src="lib/whammy.js"></script>
-
-		<script>
-			
-
-			(function () {
-
-            // webcam feed
-				var videoElement,
-
-            // videoElement is copied to canvas
-						canvasElement    = document.createElement('canvas'),
-            canvasElementCtx = canvasElement.getContext('2d'),
-						
-            requestAnimationFrameId;
-						
-            // TODO: replace with button, record/stop
-            SET_TIMEOUT_RECORDING = 3000;
-
-        console.log('Recording ' + SET_TIMEOUT_RECORDING + ' seconds.');
-
-				// Always default to maximum resolution.  Seems like browsers are limited at 1920x1080 -- 2/21/15
-				// http://stackoverflow.com/questions/27420581/get-maximum-video-resolution-with-getusermedia
-				var MEDIA_SETTINGS = {
-					'video': {
-						'optional': [
-						    {'minWidth': 640},
-						    {'minWidth': 1024},
-						    {'minWidth': 1280},
-						    {'minWidth': 1920}, // 1080p is highest browsers can go (2/27)
-						    {'minWidth': 2560},
-						  ]
-					},
-					'audio': false
-				};
-
-				function onGetUserMediaError (err) {
-          console.err(err);
-				}
-
-				function setCanvasSize (width, height) {
-					canvasElement.height = height;
-					canvasElement.width  = width;
-				}
 
 
-				function captureMedia (mediaStream) {
-					
-					window.stream = mediaStream;
-					
-					videoElement.src = window.URL.createObjectURL(mediaStream);
+    <script src="lib/gui.js"></script>
+    
+    <script>
 
-					videoElement.addEventListener('canplay', recordCam);
-
-				}
-					
-				
-				function recordCam () {	
-
-          var firstFrameSent     = false,
-              firstFrameTimestamp,
-            // contains uint8ClampedArrays
-            recordedFrames       = [],
-            
-            // how many frames have we recorded
-            recordedFramesLength = 0;
-            
-
-          // Inner function 
-					function drawVideoToCanvas () {
-
-            // draw videoElement to canvas!
-  					canvasElementCtx.drawImage(videoElement, 0, 0, videoWidth, videoWidth);
-						
-			recordedFrames.push(canvasElementCtx.getImageData( 0, 0, videoWidth, videoWidth));
-            recordedFramesLength++;
-            // save image data, push to ws at a time where it wont slow down the amount of frames we can record.
-            // recordedFrames.push(canvasElementCtx.getImageData( 0, 0, videoWidth, videoWidth));
-            // sockets.
-            // send imageData uint8ClampedArray to WS socket server on every requestAnimationFrame.					
-            // socket.emit('recordFrame', { image:true, buffer: canvasElementCtx.getImageData( 0, 0, videoWidth, videoWidth).data.buffer} );
-
-            // Manually send first frame.
-            // if (!firstFrameSent) {
-            //   console.log('send first frame');
-            //   firstFrameSent = true;
-            //   firstFrameTimestamp = Date.now();
-            //   socket.emit('recordFrame', { image:true, buffer: canvasElementCtx.getImageData( 0, 0, videoWidth, videoWidth).data.buffer} );              
-            //   socket.on('recordFrameSuccess', function () {
-            //     if (recordedFrames.length) {
-            //       socket.emit('recordFrame', {image:true, buffer: recordedFrames[0].data.buffer });
-            //       recordedFrames.shift();
-            //     } else {
-            //       socket.emit('stopRecording');
-            //       console.log(((Date.now() - firstFrameTimestamp) / 1000) + ' is how long it took to send to the server 3 seconds worth of captured frames.');
-            //     }
-            //   })
-            // } else {
-            // // Let ws server tell us when we can send another
-            //   recordedFramesLength++;
-            //   recordedFrames.push(canvasElementCtx.getImageData( 0, 0, videoWidth, videoWidth));
-            // }
-
-
-            requestAnimationFrameId = requestAnimationFrame(drawVideoToCanvas);
+      // Init application
+      document.addEventListener("DOMContentLoaded", init);
+      
+      var videoPlayer  ,
+          videoToBuffer,
+          bufferToWebp ,
+          webpToWebm   ,
           
+          // Always default to maximum resolution.  Seems like browsers are limited at 1920x1080 -- 2/21/15
+          // http://stackoverflow.com/questions/27420581/get-maximum-video-resolution-with-getusermedia
+          MEDIA_SETTINGS = {
+            'video': {
+              'optional': [
+                  {'minWidth': 640},
+                  {'minWidth': 1024},
+                  {'minWidth': 1280},
+                  {'minWidth': 1920}, // 1080p is highest browsers can go (2/27)
+                  {'minWidth': 2560},
+                ]
+            },
+            'audio': false
+          },
+
+          isRecording = false,
+
+          // cam feed recording timout id
+          recording,
+          requestAnimationFrameId;
+
+
+      function init () {
+        
+        videoPlayer   = require('./lib/videoPlayer');
+        videoToBuffer = require('./lib/videoToBuffer');
+        bufferToWebp  = require('./lib/bufferToWebp');
+        webpToWebm    = require('./lib/webpToWebm');
+        
+        document.getElementById('record').addEventListener('click', recordCamFeed);
+
+        // API for webcam and microphone
+        navigator.webkitGetUserMedia(
+          MEDIA_SETTINGS, 
+          captureMedia,       // success
+          onGetUserMediaError // failure
+        );  
+
+      }
+
+      // webcam playback
+      function captureMedia (stream) {
+          
+        var videoElement = document.getElementById('video'),
+            webcamPlayer = new videoPlayer(videoElement, stream);
+        
+        webcamPlayer.play();
+
+      }
+
+      function onGetUserMediaError (err) {
+        console.err(err);
+      }
+      
+      function recordCamFeed () {
+        
+        if (!isRecording) {
+          console.log('Recording started.');
+          isRecording = true;
+          
+          recording = new videoToBuffer(document.getElementById('video'), document.createElement('canvas'));
+
+          function recordFrame () {
+            recording.recordFrame();
+            requestAnimationFrameId = requestAnimationFrame(recordFrame);
           }
 
-          
-          videoElement.removeEventListener('canplay', recordCam);
-                    
-          videoElement.style.display='block';
-          
-          document.getElementById('recordSVG').style.display = 'block';
-
-
-          turnRecordSVGOn();
-          
-          positionRecordSVG();
-
-          window.positionRecordSVG = positionRecordSVG;
-          window.addEventListener('resize', positionRecordSVG);
-
-
-          setCanvasSize(videoElement.videoWidth, videoElement.videoHeight);
-
-
-          var encoder = new Whammy.Video(60);
-
-          var videoWidth = videoElement.videoWidth,
-              videoHeight = videoElement.videoHeight;
-
-          // START RECORDING
-          requestAnimationFrameId = requestAnimationFrame(drawVideoToCanvas);
-
-          
-          setTimeout(function () {
-  
-            console.log((Math.round(recordedFramesLength / (SET_TIMEOUT_RECORDING / 1000))) + ' frames recorded per second.');
-
-            
-
-            cancelAnimationFrame(requestAnimationFrameId);
-            
-            // var beforeTime = Date.now();
-             
-            // frame = canvasElement.getContext('2d').getImageData(0,0,canvasElement.width,canvasElement.height).data
-            // socket.emit('recordFrame', {image: true, buffer: frame.buffer});
-
-            // console.log(((Date.now() - beforeTime) / 1000) + ' time elapsed.');
-            for (var i = 0; i < recordedFrames.length; i++) {
-              console.log('Processing frame: ' + i);
-              // socket.emit('recordFrame', { image:true, buffer: recordedFrames[i].data.buffer} );
-              canvasElement.getContext('2d').putImageData(recordedFrames[i], 0, 0);
-              canvasElement.toDataURL('image/webp');
-              encoder.add(canvasElement.toDataURL('image/webp'));
-            }
-                        
-            OUTPUT = URL.createObjectURL(encoder.compile());
-            // console.log('Video saved!');
-          
-            // socket.emit('stopRecording');
-					
-          }, SET_TIMEOUT_RECORDING);
-
-
-				}
-
-		    function getNumberFromString (str) {
-		      return +(str.replace(/[^0-9\.\-]+/g, ''));
-		    };
-				
-				function getTranslate (element) {
-
-					var transform    = element.style.transform,
-							hasTranslate = transform && transform.indexOf('translate') !== -1,
-							translateArray;
-
-					if (hasTranslate) {
-
-						translateArray = transform.split(',');
-						
-						return {
-							'left': getNumberFromString(translateArray[0]),
-							'top' : getNumberFromString(translateArray[1])
-						};
-					
-					}
-
-					return {
-						'left': 0,
-						'top' : 0
-					};
-				
-				}
-
-				function turnRecordSVGOff () {
-					
-					var recordSVGStyle = document.getElementById('recordSVG').style;
-
-					recordSVGStyle.opacity = 0.4;
-					recordSVGStyle.fill    = 'red';
-				
-				}
-
-				function turnRecordSVGOn () {
-
-					var recordSVGStyle = document.getElementById('recordSVG').style;
-
-					recordSVGStyle.opacity = 1;
-					recordSVGStyle.fill    = 'url(#recordSVGGradient)';
-					
-				}
-
-			  function positionRecordSVG () {
-
-			    var MIN_DIST_FROM_EDGE = 20,
-			    		recordSVG 				 = document.getElementById('recordSVG'),
-			        currentTransform   = getTranslate(recordSVG),
-			        videoElementRect   = videoElement.getBoundingClientRect(),
-			        recordSVGRect      = document.getElementById('recordSVG').getBoundingClientRect(),
-			        left						   = currentTransform.left   + videoElementRect.left   - recordSVGRect.left   + MIN_DIST_FROM_EDGE,
-			        top 						   = currentTransform.top + videoElementRect.bottom - recordSVGRect.bottom - MIN_DIST_FROM_EDGE;
-
-			    recordSVG.style.transform = 'translate('+ left +'px,'+ top +'px)';
-
-			  }
-
-			  window.createProcessForEncoding = createProcessForEncoding;
-
-        function createProcessForEncoding () {
-          
-          var gui = require('nw.gui');
-          
-          // Eventually this could be invisible???
-          var winProcess = gui.Window.open('process.html', {
-            'new-instance': true,
-            'width': 900,
-            'height': 600,
-            'inject-js-end': 'process.js'
-          });
-
-
-
-          var script = document.createElement('script');
-    
-          script.src = 'http://localhost:8765/socket.io/socket.io.js';
-    
-          script.onload = function(){
-
-            console.log('Socket library loaded.');
-
-            socket = io('http://localhost:8765');
+          requestAnimationFrameId = requestAnimationFrame(recordFrame);
         
-          };
-
-          document.head.appendChild(script);
-          
+        } else {
+          isRecording = false;
+          stopRecording();
         }
 
+
+      }
+
+      function stopRecording () {
+        
+        console.log('Recording Stopped.');
+        
+        cancelAnimationFrame(requestAnimationFrameId);
+
+        var webpEncoder = new bufferToWebp(document.createElement('canvas'), 1080, 1920);
+        var webPArray   = webpEncoder.encode(recording.recordedFrames);
+
+        console.log('webpEncoder complete.');
+
+
+        var webmEncoder = new webpToWebm(webPArray, 60);
+
+        window.encodedVideo = URL.createObjectURL(webmEncoder.encode()); 
+
+        console.log('webmEncoder complete.');
+      }
+      
+      // function createProcessForEncoding () {
+          
+      //   var gui = require('nw.gui');
+        
+      //   // Eventually this could be invisible???
+      //   var winProcess = gui.Window.open('process.html', {
+      //     'new-instance': true,
+      //     'width': 900,
+      //     'height': 600,
+      //     'inject-js-end': 'process.js'
+      //   });
+
+      //   var script = document.createElement('script');
+  
+      //   script.src = 'http://localhost:8765/socket.io/socket.io.js';
+  
+      //   script.onload = function(){
+
+      //     console.log('Socket library loaded.');
+
+      //     socket = io('http://localhost:8765');
+      
+      //   };
+
+      //   document.head.appendChild(script);
+        
+      // }
+
+
+			// (function () {
+
+   //          // webcam feed
+			// 	var videoElement,
+
+   //          // videoElement is copied to canvas
+			// 			canvasElement    = document.createElement('canvas'),
+   //          canvasElementCtx = canvasElement.getContext('2d'),
+						
+   //          requestAnimationFrameId;
+						
+   //          // TODO: replace with button, record/stop
+   //          SET_TIMEOUT_RECORDING = 3000;
+
+   //      console.log('Recording ' + SET_TIMEOUT_RECORDING + ' seconds.');
+
+				
+
+			// 	function setCanvasSize (width, height) {
+			// 		canvasElement.height = height;
+			// 		canvasElement.width  = width;
+			// 	}
+
+
+
+				
+			// 	function recordCam () {	
+
+   //        var firstFrameSent     = false,
+   //            firstFrameTimestamp,
+   //          // contains uint8ClampedArrays
+   //          recordedFrames       = [],
+            
+   //          // how many frames have we recorded
+   //          recordedFramesLength = 0;
+            
+
+   //        // Inner function 
+			// 		function drawVideoToCanvas () {
+
+   //          // draw videoElement to canvas!
+  	// 				canvasElementCtx.drawImage(videoElement, 0, 0, videoWidth, videoWidth);
+						
+			//       recordedFrames.push(canvasElementCtx.getImageData( 0, 0, videoWidth, videoWidth));
+   //          recordedFramesLength++;
+   //          // save image data, push to ws at a time where it wont slow down the amount of frames we can record.
+   //          // recordedFrames.push(canvasElementCtx.getImageData( 0, 0, videoWidth, videoWidth));
+   //          // sockets.
+   //          // send imageData uint8ClampedArray to WS socket server on every requestAnimationFrame.					
+   //          // socket.emit('recordFrame', { image:true, buffer: canvasElementCtx.getImageData( 0, 0, videoWidth, videoWidth).data.buffer} );
+
+   //          // Manually send first frame.
+   //          // if (!firstFrameSent) {
+   //          //   console.log('send first frame');
+   //          //   firstFrameSent = true;
+   //          //   firstFrameTimestamp = Date.now();
+   //          //   socket.emit('recordFrame', { image:true, buffer: canvasElementCtx.getImageData( 0, 0, videoWidth, videoWidth).data.buffer} );              
+   //          //   socket.on('recordFrameSuccess', function () {
+   //          //     if (recordedFrames.length) {
+   //          //       socket.emit('recordFrame', {image:true, buffer: recordedFrames[0].data.buffer });
+   //          //       recordedFrames.shift();
+   //          //     } else {
+   //          //       socket.emit('stopRecording');
+   //          //       console.log(((Date.now() - firstFrameTimestamp) / 1000) + ' is how long it took to send to the server 3 seconds worth of captured frames.');
+   //          //     }
+   //          //   })
+   //          // } else {
+   //          // // Let ws server tell us when we can send another
+   //          //   recordedFramesLength++;
+   //          //   recordedFrames.push(canvasElementCtx.getImageData( 0, 0, videoWidth, videoWidth));
+   //          // }
+
+
+   //          requestAnimationFrameId = requestAnimationFrame(drawVideoToCanvas);
+          
+   //        }
+
+          
+   //        videoElement.removeEventListener('canplay', recordCam);
+                    
+   //        videoElement.style.display='block';
+          
+   //        // document.getElementById('recordSVG').style.display = 'block';
+
+
+   //        turnRecordSVGOn();
+          
+   //        positionRecordSVG();
+
+   //        window.positionRecordSVG = positionRecordSVG;
+   //        window.addEventListener('resize', positionRecordSVG);
+
+
+   //        setCanvasSize(videoElement.videoWidth, videoElement.videoHeight);
+
+
+   //        var encoder = new Whammy.Video(60);
+
+   //        var videoWidth = videoElement.videoWidth,
+   //            videoHeight = videoElement.videoHeight;
+
+   //        // START RECORDING
+   //        requestAnimationFrameId = requestAnimationFrame(drawVideoToCanvas);
+
+          
+   //        setTimeout(function () {
+  
+   //          console.log((Math.round(recordedFramesLength / (SET_TIMEOUT_RECORDING / 1000))) + ' frames recorded per second.');
+
+            
+
+   //          cancelAnimationFrame(requestAnimationFrameId);
+            
+   //          // var beforeTime = Date.now();
+             
+   //          // frame = canvasElement.getContext('2d').getImageData(0,0,canvasElement.width,canvasElement.height).data
+   //          // socket.emit('recordFrame', {image: true, buffer: frame.buffer});
+
+   //          // console.log(((Date.now() - beforeTime) / 1000) + ' time elapsed.');
+   //          for (var i = 0; i < recordedFrames.length; i++) {
+   //            console.log('Processing frame: ' + i);
+   //            // socket.emit('recordFrame', { image:true, buffer: recordedFrames[i].data.buffer} );
+   //            canvasElement.getContext('2d').putImageData(recordedFrames[i], 0, 0);
+   //            canvasElement.toDataURL('image/webp');
+   //            encoder.add(canvasElement.toDataURL('image/webp'));
+   //          }
+                        
+   //          OUTPUT = URL.createObjectURL(encoder.compile());
+   //          // console.log('Video saved!');
+          
+   //          // socket.emit('stopRecording');
+					
+   //        }, SET_TIMEOUT_RECORDING);
+
+
+			// 	}
+
+		 //    function getNumberFromString (str) {
+		 //      return +(str.replace(/[^0-9\.\-]+/g, ''));
+		 //    };
+				
+			// 	function getTranslate (element) {
+
+			// 		var transform    = element.style.transform,
+			// 				hasTranslate = transform && transform.indexOf('translate') !== -1,
+			// 				translateArray;
+
+			// 		if (hasTranslate) {
+
+			// 			translateArray = transform.split(',');
+						
+			// 			return {
+			// 				'left': getNumberFromString(translateArray[0]),
+			// 				'top' : getNumberFromString(translateArray[1])
+			// 			};
+					
+			// 		}
+
+			// 		return {
+			// 			'left': 0,
+			// 			'top' : 0
+			// 		};
+				
+			// 	}
+
+			// 	function turnRecordSVGOff () {
+					
+			// 		var recordSVGStyle = document.getElementById('recordSVG').style;
+
+			// 		recordSVGStyle.opacity = 0.4;
+			// 		recordSVGStyle.fill    = 'red';
+				
+			// 	}
+
+			// 	function turnRecordSVGOn () {
+
+			// 		var recordSVGStyle = document.getElementById('recordSVG').style;
+
+			// 		recordSVGStyle.opacity = 1;
+			// 		recordSVGStyle.fill    = 'url(#recordSVGGradient)';
+					
+			// 	}
+
+			//   function positionRecordSVG () {
+
+			//     var MIN_DIST_FROM_EDGE = 20,
+			//     		recordSVG 				 = document.getElementById('recordSVG'),
+			//         currentTransform   = getTranslate(recordSVG),
+			//         videoElementRect   = videoElement.getBoundingClientRect(),
+			//         recordSVGRect      = document.getElementById('recordSVG').getBoundingClientRect(),
+			//         left						   = currentTransform.left   + videoElementRect.left   - recordSVGRect.left   + MIN_DIST_FROM_EDGE,
+			//         top 						   = currentTransform.top + videoElementRect.bottom - recordSVGRect.bottom - MIN_DIST_FROM_EDGE;
+
+			//     recordSVG.style.transform = 'translate('+ left +'px,'+ top +'px)';
+
+			//   }
+
+			//   window.createProcessForEncoding = createProcessForEncoding;
+
+        // function createProcessForEncoding () {
+          
+        //   var gui = require('nw.gui');
+          
+        //   // Eventually this could be invisible???
+        //   var winProcess = gui.Window.open('process.html', {
+        //     'new-instance': true,
+        //     'width': 900,
+        //     'height': 600,
+        //     'inject-js-end': 'process.js'
+        //   });
+
+
+
+        //   var script = document.createElement('script');
+    
+        //   script.src = 'http://localhost:8765/socket.io/socket.io.js';
+    
+        //   script.onload = function(){
+
+        //     console.log('Socket library loaded.');
+
+        //     socket = io('http://localhost:8765');
+        
+        //   };
+
+        //   document.head.appendChild(script);
+          
+        // }
+
 			    
-		    function init () {
+		 //  //   function init () {
 
-					createProcessForEncoding()
+			// 	// 	createProcessForEncoding()
 			
-					videoElement = document.querySelector('video');
+			// 	// 	videoElement = document.querySelector('video');
 
-					window.videoElement = videoElement;
+			// 	// 	window.videoElement = videoElement;
 
-					navigator.webkitGetUserMedia(
-						MEDIA_SETTINGS, 
-						captureMedia, 
-						onGetUserMediaError
-					);	
+			// 	// 	navigator.webkitGetUserMedia(
+			// 	// 		MEDIA_SETTINGS, 
+			// 	// 		captureMedia, 
+			// 	// 		onGetUserMediaError
+			// 	// 	);	
 
-				}
+			// 	// }
 
-				document.addEventListener("DOMContentLoaded", init);
+			// 	// document.addEventListener("DOMContentLoaded", init);
 
-			}());
+			// }());
 
 		</script>
 	
@@ -325,7 +432,7 @@
 		</div>
 
 		<!--  VIDEO -->
-		<video style='display:none;' id='video' autoplay></video>
+		<video id='video' style='display:none;' id='video' autoplay></video>
 		
 		<!-- RECORD ICON -->
 		<svg style='display:none;' id='recordSVG' height="80" width="80">
