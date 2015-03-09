@@ -1,0 +1,1 @@
+cmd_Release/obj.target/webpEncoder.node := flock ./Release/linker.lock g++ -shared -pthread -rdynamic -m64  -Wl,-soname=webpEncoder.node -o Release/obj.target/webpEncoder.node -Wl,--start-group Release/obj.target/webpEncoder/webpEncoder.o -Wl,--end-group 

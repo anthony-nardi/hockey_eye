@@ -1,0 +1,1 @@
+cmd_Release/obj.target/addNums.node := flock ./Release/linker.lock g++ -shared -pthread -rdynamic -m64  -Wl,-soname=addNums.node -o Release/obj.target/addNums.node -Wl,--start-group Release/obj.target/addNums/addNums.o -Wl,--end-group 

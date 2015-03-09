@@ -1,0 +1,1 @@
+cmd_Release/webpEncoder.node := ln -f "Release/obj.target/webpEncoder.node" "Release/webpEncoder.node" 2>/dev/null || (rm -rf "Release/webpEncoder.node" && cp -af "Release/obj.target/webpEncoder.node" "Release/webpEncoder.node")
