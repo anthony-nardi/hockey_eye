@@ -9,8 +9,8 @@
       "sources": ["helloWorld.cpp"]
     },
     {
-      "target_name": "webpEncoder",
-      "sources": ["webpEncoder.cpp"]
+      "target_name": "printBuffer",
+      "sources": ["printBuffer.cpp"]
     }
   ]
 }
